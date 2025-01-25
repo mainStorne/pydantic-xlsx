@@ -20,8 +20,8 @@ This can be one of the following cases:
 from abc import ABCMeta, abstractmethod
 from enum import Enum
 import math
-from typing import Any, Dict, List, Type, TYPE_CHECKING
-
+from typing import Any, Dict, List, Type, TYPE_CHECKING, get_args, get_origin, Generic, TypeVar, Generator
+from inspect import ismethod
 from openpyxl import Workbook
 from openpyxl import utils as pyxl_utils
 from openpyxl.worksheet.worksheet import Worksheet
@@ -368,12 +368,13 @@ class CompositionFactory:
         """
         contains_list_of_models = False
 
-        for key, prop in model.__fields__.items():
-            typ = getattr(prop.outer_type_, "__origin__", None)
+        for key, prop in model.model_fields.items():
+            typ = get_origin(prop.annotation)
+
 
             # Thanks to Python's inability to handle cyclic imports checking if
             # the type is XlsxModel is done with this handy string hack.
-            bases = [base.__name__ for base in prop.type_.__bases__]
+            bases = [base.__name__ for base in get_args(prop.annotation)[0].__bases__]
             if typ is not None and \
                     issubclass(typ, List) and \
                     "XlsxModel" in bases:
@@ -384,8 +385,29 @@ class CompositionFactory:
         # If __root__ is present as a parameter in a model pydantic forbids any
         # other fields. Thus it's not needed to check if there are any other
         # lists of models.
-        if "__root__" in model.__fields__ and contains_list_of_models:
+        if "__root__" in model.model_fields and contains_list_of_models:
             return RootCollectionComposition
         if contains_list_of_models:
             return CollectionComposition
         return SingleModelComposition
+
+
+class SheetComposition[XlsxModel](Composition):
+    """
+    The model consists of a single XlsxModel instance.
+    """
+    @classmethod
+    def workbook_to_model(
+        cls,
+        model: XlsxModel,
+        wb: Workbook,
+    ) -> Generator[XlsxModel, None, None]:
+        sheet_name = model.__sheetname__() if ismethod(model.__sheetname__)  else model.__sheetname__
+        ws = wb[sheet_name]
+        data: Dict[str, Any] = {}
+        for row in range(2, ws.max_row+1):
+            for column in range(1, ws.max_column+1):
+                key = ws.cell(row=1, column=column).value
+                data[key] = ws.cell(row=row, column=column).value
+
+            yield model.model_validate(data)

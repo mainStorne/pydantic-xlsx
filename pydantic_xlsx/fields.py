@@ -3,10 +3,10 @@ Extends pydantic's fields with some extra functionality.
 """
 
 from abc import ABCMeta, abstractmethod
-from typing import Any, Generic, Optional, Type, TypeVar
+from typing import Any, Generic, Optional, Type, TypeVar, Unpack, Self
 
 from openpyxl.styles import Font
-from pydantic.fields import FieldInfo, Undefined
+from pydantic.fields import FieldInfo, PydanticUndefined, _FromFieldInfoInputs
 
 from .types import Money
 
@@ -22,14 +22,19 @@ class XlsxFieldInfo(FieldInfo):
         "number_format",
     )
 
-    def __init__(self, default: Any = Undefined, **kwargs: Any) -> None:
-        super().__init__(default, **kwargs)
-        self.font = kwargs.pop('font', None)
-        self.number_format = kwargs.pop("number_format", None)
+    def __init__(self, font: Optional[Font] = None,
+                 number_format: Optional[str] = None,
+                 **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.font = font
+        self.number_format = number_format
+
+
+
 
 
 def XlsxField(
-    default: Any = Undefined,
+    default: Any = PydanticUndefined,
     *,
     font: Optional[Font] = None,
     number_format: Optional[str] = None,
@@ -40,9 +45,9 @@ def XlsxField(
     applied to the whole column.
     """
     field_info = XlsxFieldInfo(
-        default,
         font=font,
         number_format=number_format,
+        default=default,
         **kwargs,
     )
     return field_info

@@ -1,15 +1,16 @@
 """
 Provides the `XlsxModel` to the library user.
 """
-
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, List, Optional, Type, Union
+from typing import Any, List, Optional, Type, Union, ClassVar, Generic
 
 from openpyxl import load_workbook, Workbook
 from pydantic import BaseModel
 
-from .composition import CompositionFactory
+from .composition import CompositionFactory, SheetComposition
 from .config import XlsxConfig
+
 
 
 class XlsxModel(BaseModel):
@@ -18,17 +19,22 @@ class XlsxModel(BaseModel):
     files. The class also allows the usage of collection by using the __root__
     parameter.
     """
-
-    Config = XlsxConfig
+    __sheetname__: ClassVar[str | Callable[[], str]]
+    Config: ClassVar = XlsxConfig
 
     def __init__(self, **data: Any):
         super().__init__(**data)
 
     @classmethod
+    def __sheetname__(cls):
+        return cls.__name__
+
+
+    @classmethod
     def from_file(
             cls: Type["XlsxModel"],
             path: Union[str, Path]
-    ) -> "XlsxModel":
+    ):
         """Loads data from a Excel file."""
         return cls.from_workbook(load_workbook(path))
 
@@ -36,10 +42,10 @@ class XlsxModel(BaseModel):
     def from_workbook(
             cls: Type["XlsxModel"],
             wb: Workbook
-    ) -> "XlsxModel":
+    ):
         """Loads data from a Excel file."""
 
-        return CompositionFactory.from_model(cls).workbook_to_model(cls, wb)
+        return SheetComposition.workbook_to_model(cls, wb)
 
     def workbook(self) -> Workbook:
         """Returns a openpyxl Workbook."""
